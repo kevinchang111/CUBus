@@ -4,7 +4,6 @@
 extern Window *window;
 extern Window *stops_window;
 extern TextLayer *load_layer;
-//static TextLayer *eta_layer;
 extern MenuLayer *main_menu_layer;
 extern MenuLayer *stops_menu_layer;
 

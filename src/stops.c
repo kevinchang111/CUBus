@@ -5,11 +5,11 @@ MenuLayer *stops_menu_layer;
 int num_stops = 0;
 char main_stop_name[50];
 char stops_list[10][50]; 
-
+int curr_stop_row = 0;
 void push_stops_menu(MenuLayer *menu_layer, MenuIndex * cell_index, void *callback_context){
 	window_stack_push(stops_window, true);
 	menu_layer_reload_data(stops_menu_layer);
-
+	menu_layer_set_selected_index(stops_menu_layer, (MenuIndex){ .section = 0, .row = curr_stop_row}, GTextAlignmentCenter, false);
 }
 void draw_stops_menu_header_callback(GContext* ctx, const Layer* cell_layer, uint16_t section_index, void* data){
 	
@@ -47,6 +47,8 @@ void change_stop(MenuLayer * menu_layer, MenuIndex* cell_index, void* callback_c
 	dict_write_cstring(it, 1, "changeStop");
 	dict_write_uint8(it, 2, cell_index->row);
 	dict_write_end(it);
-	AppMessageResult r = app_message_outbox_send();	
+	app_message_outbox_send();
+	curr_stop_row = cell_index->row;
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "done changeStop"); 
+	menu_layer_set_selected_index(main_menu_layer,MenuIndex(0,0) , MenuRowAlignCenter, false);
 }
