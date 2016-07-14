@@ -2,6 +2,7 @@
 Window *window;
 MenuLayer *main_menu_layer;
 TextLayer *load_layer;
+static TextLayer * time_layer;
 int num_buses = 0;
 bool int_connection = true;
 bool bt_connection = false;
@@ -43,8 +44,7 @@ void bt_connection_handler(bool connected){
 		int_connection = false;
 	}
 }
-void times_receiver(DictionaryIterator* iter, void* context){	
-
+void times_receiver(DictionaryIterator* iter, void* context){	//handles APP_MSG of list of buses and times, stores data into bus_out and eta_out array
 	Tuple* headsign = NULL;
 	num_buses = dict_find(iter, 1)->value->int32; 
 	if(dict_find(iter,2)->value->int32 == 2){
@@ -87,13 +87,13 @@ void times_receiver(DictionaryIterator* iter, void* context){
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "TIMES RECEIVED COMPLETE");	
 	//menu_layer_set_selected_index(main_menu_layer,MenuIndex(0,0) , MenuRowAlignCenter, false);
 }
-static void times_failed(AppMessageResult reason, void *context){
+static void times_failed(AppMessageResult reason, void *context){//failed receive msg
 	APP_LOG(APP_LOG_LEVEL_DEBUG,"FAILED RECEIVE %d\n", (int)reason);
 }
-void outbox_failed(DictionaryIterator *iterator, AppMessageResult reason, void* context){
+void outbox_failed(DictionaryIterator *iterator, AppMessageResult reason, void* context){//failed outbox
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "FAILED OUTBOX %d\n", (int)reason);
 }
-static void stops_receiver(DictionaryIterator* iter, void* context){
+static void stops_receiver(DictionaryIterator* iter, void* context){//takes APP_MESSAGE of stops, puts into stops array
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "STOPS RECEIVED");	
 	num_stops = dict_find(iter, 1)->value->int32; 
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "num stops: %d\n", num_stops);
@@ -110,7 +110,7 @@ static void stops_receiver(DictionaryIterator* iter, void* context){
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "STOPS RECEIVED COMPLETE");	
 	refresh_times();
 }	
-static void msg_receiver(DictionaryIterator* iter, void* context){
+static void msg_receiver(DictionaryIterator* iter, void* context){ //APP_MSG handler, redirects to correct function (stops/times)
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "MSG RECEIVED");	
 	int connect = dict_find(iter, 1)->value->int32; 
 	if(connect == -1) {
@@ -130,7 +130,7 @@ static void msg_receiver(DictionaryIterator* iter, void* context){
 	else if(type == 2) stops_receiver(iter, context);
 	else{APP_LOG(APP_LOG_LEVEL_DEBUG, "ERROR: BAD MSG");}	
 }
-static void refresh_times(){
+static void refresh_times(){//refresh buses
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "begin REFRESH_TIMES");
 	DictionaryIterator* it;
 	int r = (int)app_message_outbox_begin(&it);
@@ -142,7 +142,7 @@ static void refresh_times(){
 	app_message_outbox_send();	
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "refresh done");	
 }
-static void refresh_stops(){
+static void refresh_stops(){//refresh stops
 		APP_LOG(APP_LOG_LEVEL_DEBUG, "ref_stops");
 		DictionaryIterator* it;
 		int r = (int)app_message_outbox_begin(&it);
@@ -154,7 +154,7 @@ static void refresh_stops(){
 		dict_write_end(it);
 		app_message_outbox_send();	
 }
-static void refresh_data(MenuLayer * menu_layer, MenuIndex* cell_index, void* callback_context){
+static void refresh_data(MenuLayer * menu_layer, MenuIndex* cell_index, void* callback_context){//handles manual refresh
 	layer_set_hidden(text_layer_get_layer(load_layer), false);
 	layer_set_hidden(menu_layer_get_layer(main_menu_layer), true);
 	text_layer_set_text(load_layer, "Refreshing...");
@@ -186,14 +186,19 @@ static void auto_refresh(void* data){
 	else refresh_times();	
 	auto_ref_timer = app_timer_register(20000, auto_refresh, NULL); 
 }
-/*static void tick_timer_handler(struct tm* tick_time, TimeUnits units_changed){
-	refresh_times();
-	if(++auto_refresh_count >= 10){
-		tick_timer_service_unsubscribe();
-	}
-}*/
+void tap_handler(AccelAxisType axis, int32_t direction){//handle "shake" 
+	APP_LOG(APP_LOG_LEVEL_DEBUG, "tapped");
+	refresh_data(NULL,NULL,NULL);
+}
+static void tick_timer_handler(struct tm* tick_time, TimeUnits units_changed){
+	time_t temp = time(NULL);
+	struct tm* new_time = localtime(&temp);
+	static char s_buffer[8];
+	strftime(s_buffer,sizeof(s_buffer), clock_is_24h_style()?"%H:%M":"%I:%M", new_time);
+	text_layer_set_text(time_layer, s_buffer);
+}
 static void draw_main_menu_header_callback(GContext* ctx, const Layer* cell_layer, uint16_t section_index, void* data){
-	graphics_context_set_text_color(ctx, GColorBlack);
+	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx, main_stop_name, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), layer_get_bounds(cell_layer), GTextOverflowModeFill , GTextAlignmentCenter, NULL);
 } 
 static uint16_t main_menu_get_num_rows_callback(MenuLayer* menu_layer, uint16_t section_index, void *data){
@@ -217,7 +222,8 @@ static int16_t main_menu_header_height_callback(MenuLayer* menu_layer, uint16_t 
 static void window_load(Window *window) {
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "load window"); 
   Layer *window_layer = window_get_root_layer(window);
-  GRect bounds = layer_get_bounds(window_layer);
+	window_set_background_color(window, GColorFromRGB(0,10,255)); 
+ GRect bounds = layer_get_bounds(window_layer);
 	main_menu_layer = menu_layer_create(bounds);
 	menu_layer_set_callbacks(main_menu_layer, NULL, (MenuLayerCallbacks){
 		.get_num_rows = main_menu_get_num_rows_callback,
@@ -227,12 +233,22 @@ static void window_load(Window *window) {
 		.select_click = refresh_data,
 		.select_long_click = push_stops_menu
 	});
+	time_layer = text_layer_create(GRect(0,0,bounds.size.w,22));
+	text_layer_set_background_color(time_layer, GColorDarkGray);
+	text_layer_set_text_color(time_layer,GColorWhite);
+	text_layer_set_text_alignment(time_layer, GTextAlignmentCenter);
+	text_layer_set_font(time_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18));
 	layer_add_child(window_layer, menu_layer_get_layer(main_menu_layer));
+	layer_add_child(window_layer, text_layer_get_layer(time_layer));
 	layer_set_hidden(menu_layer_get_layer(main_menu_layer), true);
-	menu_layer_set_highlight_colors(main_menu_layer, GColorFromRGB(150,113,200), GColorFromRGB(255,255,255));  
+	menu_layer_set_highlight_colors(main_menu_layer, GColorFromRGB(255,85,0), GColorFromRGB(255,255,255));  
+	menu_layer_set_normal_colors(main_menu_layer, GColorFromRGB(0,10,255), GColorFromRGB(255,255,255));  
 	
-	load_layer = text_layer_create(GRect(0, 62, bounds.size.w, 30));
+	load_layer = text_layer_create(GRect(0, 70, bounds.size.w, 40));
  	text_layer_set_text_alignment(load_layer, GTextAlignmentCenter);
+	text_layer_set_text_color(load_layer,GColorWhite);
+	text_layer_set_background_color(load_layer, GColorOrange);
+	text_layer_set_font(load_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
 	layer_add_child(window_layer, text_layer_get_layer(load_layer));
 	text_layer_set_text(load_layer, "Loading...");	
 	bt_connection = connection_service_peek_pebble_app_connection();	
@@ -253,7 +269,7 @@ static void stops_window_load(Window *window) {
 	});	
 	menu_layer_set_click_config_onto_window(stops_menu_layer, stops_window);
 	layer_add_child(window_layer, menu_layer_get_layer(stops_menu_layer));
-	menu_layer_set_highlight_colors(stops_menu_layer, GColorFromRGB(100,30,255), GColorFromRGB(255,255,255));  	
+	menu_layer_set_highlight_colors(stops_menu_layer, GColorFromRGB(0,10,255), GColorFromRGB(255,255,255));  	
 }
 static void window_unload(Window *window) {
   text_layer_destroy(load_layer);
@@ -272,7 +288,8 @@ static void init(void) {
 	app_message_register_inbox_dropped(times_failed);
 	app_message_register_inbox_received(msg_receiver);
 	app_message_register_outbox_failed(outbox_failed);	
-	//tick_timer_service_subscribe(MINUTE_UNIT, tick_timer_handler);
+	accel_tap_service_subscribe(tap_handler);
+	tick_timer_service_subscribe(MINUTE_UNIT, tick_timer_handler);
 //create windows
   stops_window = window_create(); 
   window_set_window_handlers(stops_window, (WindowHandlers) {
