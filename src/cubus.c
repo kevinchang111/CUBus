@@ -40,7 +40,7 @@ void bt_connection_handler(bool connected){
 	}
 	else{
 		app_timer_cancel(auto_ref_timer);
-		text_layer_set_text(load_layer, "CHECK BLUETOOTH CONNECTION");
+		text_layer_set_text(load_layer, "CHECK BLUETOOTH");
 		int_connection = false;
 	}
 }
@@ -59,14 +59,14 @@ void times_receiver(DictionaryIterator* iter, void* context){	//handles APP_MSG 
 		(headsign = dict_find(iter, i*2+2));
 		Tuple* eta = dict_find(iter, i*2+3); 
 		if(headsign){
-			APP_LOG(APP_LOG_LEVEL_DEBUG, "headsign: %s\n", headsign->value->cstring);
+		//	APP_LOG(APP_LOG_LEVEL_DEBUG, "headsign: %s\n", headsign->value->cstring);
 			strcpy(head_sign_received, headsign->value->cstring );	
 		}else{
 			APP_LOG(APP_LOG_LEVEL_DEBUG, "no headsign %d / %d", i, num_buses);
 		}
 		if(eta){
 			eta_received = eta->value->int32;
-			APP_LOG(APP_LOG_LEVEL_DEBUG, "ETA GOT: %d", eta_received);
+		//	APP_LOG(APP_LOG_LEVEL_DEBUG, "ETA GOT: %d", eta_received);
 				
 		}else{
 			APP_LOG(APP_LOG_LEVEL_DEBUG, "no eta");
@@ -198,11 +198,12 @@ static void tick_timer_handler(struct tm* tick_time, TimeUnits units_changed){
 	text_layer_set_text(time_layer, s_buffer);
 }
 static void draw_main_menu_header_callback(GContext* ctx, const Layer* cell_layer, uint16_t section_index, void* data){
+	if(PBL_IF_COLOR_ELSE(1,0))
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx, main_stop_name, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), layer_get_bounds(cell_layer), GTextOverflowModeFill , GTextAlignmentCenter, NULL);
 } 
 static uint16_t main_menu_get_num_rows_callback(MenuLayer* menu_layer, uint16_t section_index, void *data){
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "menu_get_rows : %d\n", num_buses);
+//	APP_LOG(APP_LOG_LEVEL_DEBUG, "menu_get_rows : %d\n", num_buses);
 	if(num_buses == 0) return 1;
 	return num_buses;  
 
@@ -212,18 +213,22 @@ static void draw_main_menu_row_callback(GContext* ctx, const Layer* cell_layer, 
 		menu_cell_basic_draw(ctx, cell_layer, "NO BUSES", NULL,NULL);
 		return; 
 	}
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "bus_out[%d] : %s\n", cell_index->row, bus_out[cell_index->row]);
-	APP_LOG(APP_LOG_LEVEL_DEBUG, "eta_out[%d] : %s\n", cell_index->row, eta_out[cell_index->row]);
+//	APP_LOG(APP_LOG_LEVEL_DEBUG, "bus_out[%d] : %s\n", cell_index->row, bus_out[cell_index->row]);
+//	APP_LOG(APP_LOG_LEVEL_DEBUG, "eta_out[%d] : %s\n", cell_index->row, eta_out[cell_index->row]);
 	menu_cell_basic_draw(ctx, cell_layer, bus_out[cell_index->row], eta_out[cell_index->row],NULL); 
 }
 static int16_t main_menu_header_height_callback(MenuLayer* menu_layer, uint16_t section_index, void* callback_context){
 	return MENU_CELL_ROUND_UNFOCUSED_SHORT_CELL_HEIGHT;
 }
+
 static void window_load(Window *window) {
+  
+  int color =   PBL_IF_COLOR_ELSE( 1, 0);
 	APP_LOG(APP_LOG_LEVEL_DEBUG, "load window"); 
   Layer *window_layer = window_get_root_layer(window);
-	window_set_background_color(window, GColorFromRGB(0,10,255)); 
- GRect bounds = layer_get_bounds(window_layer);
+	if(color) window_set_background_color(window, GColorFromRGB(0,10,255)); 
+  GRect deviceBounds = layer_get_bounds(window_layer);
+ GRect bounds =  GRect(deviceBounds.origin.x, deviceBounds.origin.y+22, deviceBounds.size.w,deviceBounds.size.h);
 	main_menu_layer = menu_layer_create(bounds);
 	menu_layer_set_callbacks(main_menu_layer, NULL, (MenuLayerCallbacks){
 		.get_num_rows = main_menu_get_num_rows_callback,
@@ -241,13 +246,19 @@ static void window_load(Window *window) {
 	layer_add_child(window_layer, menu_layer_get_layer(main_menu_layer));
 	layer_add_child(window_layer, text_layer_get_layer(time_layer));
 	layer_set_hidden(menu_layer_get_layer(main_menu_layer), true);
-	menu_layer_set_highlight_colors(main_menu_layer, GColorFromRGB(255,85,0), GColorFromRGB(255,255,255));  
-	menu_layer_set_normal_colors(main_menu_layer, GColorFromRGB(0,10,255), GColorFromRGB(255,255,255));  
+	PBL_IF_COLOR_ELSE(menu_layer_set_highlight_colors(main_menu_layer, GColorFromRGB(255,85,0), GColorFromRGB(255,255,255)),
+	menu_layer_set_highlight_colors(main_menu_layer, GColorFromRGB(150,113,200), GColorFromRGB(255,255,255)));
 	
 	load_layer = text_layer_create(GRect(0, 70, bounds.size.w, 40));
+  if(color){
+    menu_layer_set_normal_colors(main_menu_layer, GColorFromRGB(0,10,255), GColorFromRGB(255,255,255));
+    text_layer_set_text_color(load_layer,GColorWhite);
+    text_layer_set_background_color(load_layer, GColorOrange);
+  }
+  else
+    menu_layer_set_normal_colors(main_menu_layer, GColorFromRGB(255,255,255), GColorFromRGB(0,0,0));  
+	
  	text_layer_set_text_alignment(load_layer, GTextAlignmentCenter);
-	text_layer_set_text_color(load_layer,GColorWhite);
-	text_layer_set_background_color(load_layer, GColorOrange);
 	text_layer_set_font(load_layer, fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
 	layer_add_child(window_layer, text_layer_get_layer(load_layer));
 	text_layer_set_text(load_layer, "Loading...");	
