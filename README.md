@@ -1,6 +1,6 @@
 #CUBus
 Basic pebble-watch bus schedule app for Champaign-Urbana buses.<br />
-Link to app: <a href "https://apps.getpebble.com/en_US/application/56df439e68994fb67d000023">here</a><br/>
+Link to app: <a href "https://apps.getpebble.com/en_US/application/56df439e68994fb67d000023/">here</a><br/>
 Utilizes the API from <a href = "http://developer.cumtd.com">http://developer.cumtd.com</a><br />
 <ul>
 <li>Long press to change stops</li>
